@@ -8,7 +8,7 @@ class Local():
         self.seed = None
         
     def hash_ftn(self, bot):
-        self.auth.hash_ftn(bot, self)
+        return self.auth.hash_ftn(bot, self)
         
     def gen_hash_chain(self):
         token = self.seed

@@ -1,8 +1,8 @@
 import random
 
 class Auth():
-    def __init__(self, auth_ip, target_ip):
-        self.target_ip = target_ip
+    def __init__(self, auth_ip, target):
+        self.target = target
         self.auth_ip = auth_ip
     
         self.token = 0
@@ -11,4 +11,4 @@ class Auth():
         return random.randint(1, 100)
     
     def hash_ftn(self, bot, local):
-        bot_ip, local_ip, auth_ip, time, seed, nonce
+        return self.target(bot, local, self)

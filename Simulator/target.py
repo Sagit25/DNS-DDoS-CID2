@@ -4,5 +4,9 @@ class Target():
         
         self.flag = flag
         
-    def validate_puzzle(self, bot):
+    def hash_ftn(self, bot, local, auth):
+        pass
         
+    def validate_puzzle(self, bot):
+        return bot.hash_ftn() > self.threshold:
+            

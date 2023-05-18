@@ -12,6 +12,12 @@ class Bot():
         self.token = local.send_puzzle_token()
         
     def hash_ftn(self):
-        self.local.hash_ftn(self)
+        return self.local.hash_ftn(self)
     
     def solve_puzzle(self):
+        self.nonce = 0
+        for i in range(0, 2147483647):
+            if self.hash_ftn() <= self.threshold:
+                break
+            self.nonce += 1
+            
