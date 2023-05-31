@@ -12,9 +12,6 @@
 
 
 __u32 get_hash(__u32 nonce, __u32 target_ip, __u32 target_port, __u8 puzzle_type) {
-    printk("Hello from get_hash\n");
-
-    
     unsigned char plaintext[PLAIN_LENGTH];
     unsigned char hash_sha256[SHA256_LENGTH];
     // char *plaintext = "This is a test";
@@ -81,8 +78,6 @@ __u32 get_hash(__u32 nonce, __u32 target_ip, __u32 target_port, __u8 puzzle_type
 }
 
 __u32 solve_puzzle(__u32 threshold, __u32 target_ip, __u32 target_port, __u8 puzzle_type) {
-    printk("Hello from solve_puzzle\n");
-
     __u32 nonce;
     for(nonce = 1; nonce > 0; ++nonce) {
         if(get_hash(nonce, target_ip, target_port, puzzle_type) < threshold) {
@@ -92,12 +87,12 @@ __u32 solve_puzzle(__u32 threshold, __u32 target_ip, __u32 target_port, __u8 puz
     return 0;
 }
 
-SYSCALL_DEFINE4(sys_puzzle_hash, __u32, nonce, __u32, target_ip, __u32, target_port, __u8, puzzle_type) {
+SYSCALL_DEFINE4(puzzle_hash, __u32, nonce, __u32, target_ip, __u32, target_port, __u8, puzzle_type) {
     return get_hash(nonce, target_ip, target_port, puzzle_type);
 }
 
 
-SYSCALL_DEFINE4(sys_puzzle_solve, __u32, threshold, __u32, target_ip, __u32, target_port, __u8, puzzle_type) {
+SYSCALL_DEFINE4(puzzle_solve, __u32, threshold, __u32, target_ip, __u32, target_port, __u8, puzzle_type) {
     return solve_puzzle(threshold, target_ip, target_port, puzzle_type);
 }
 

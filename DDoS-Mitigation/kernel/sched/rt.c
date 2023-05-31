@@ -2376,7 +2376,7 @@ static unsigned int get_rr_interval_rt(struct rq *rq, struct task_struct *task)
 
 const struct sched_class rt_sched_class = {
 // modified by junjinyong
-	.next			= &wrr_sched_class,
+	.next			= &fair_sched_class,
 	
 	.enqueue_task		= enqueue_task_rt,
 	.dequeue_task		= dequeue_task_rt,

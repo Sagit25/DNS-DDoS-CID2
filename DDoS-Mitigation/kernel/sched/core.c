@@ -2334,10 +2334,6 @@ int sched_fork(unsigned long clone_flags, struct task_struct *p)
 		return -EAGAIN;
 	else if (rt_prio(p->prio))
 		p->sched_class = &rt_sched_class;
-	else if (p->policy == SCHED_WRR) { //
-		p->sched_class = &wrr_sched_class; //
-		p->wrr.weight = 10; //
-	}
 	else
 		p->sched_class = &fair_sched_class;
 
@@ -3065,8 +3061,6 @@ void scheduler_tick(void)
 #ifdef CONFIG_SMP
 	rq->idle_balance = idle_cpu(cpu);
 	trigger_load_balance(rq);
-	// modified by junjinyong
-	trigger_load_balance_wrr(rq);
 #endif
 }
 
@@ -4103,10 +4097,6 @@ static void __setscheduler(struct rq *rq, struct task_struct *p,
 		p->sched_class = &dl_sched_class;
 	else if (rt_prio(p->prio))
 		p->sched_class = &rt_sched_class;
-	else if (p->policy == SCHED_WRR) {
-		p->sched_class = &wrr_sched_class;
-		p->wrr.weight = 10;
-	}
 	else
 		p->sched_class = &fair_sched_class;
 }
@@ -6002,8 +5992,6 @@ void __init sched_init(void)
 		rq->calc_load_update = jiffies + LOAD_FREQ;
 		init_cfs_rq(&rq->cfs);
 		init_rt_rq(&rq->rt);
-		// modified by junjinyong
-		init_wrr_rq(&rq->wrr, cpu_id);
 
 		init_dl_rq(&rq->dl);
 #ifdef CONFIG_FAIR_GROUP_SCHED
@@ -6090,8 +6078,6 @@ void __init sched_init(void)
 	idle_thread_set_boot_cpu();
 #endif
 	init_sched_fair_class();
-	// modified by junjinyong
-	init_sched_wrr_class();
 
 	init_schedstats();
 
