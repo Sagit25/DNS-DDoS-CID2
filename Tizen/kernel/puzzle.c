@@ -69,6 +69,8 @@ __u32 do_puzzle_solve(__u32 threshold, __u32 target_ip, __u32 target_port, __u8 
     return 0;
 }
 
+// deprecated
+/*
 SYSCALL_DEFINE4(puzzle_hash, __u32, nonce, __u32, target_ip, __u32, target_port, __u8, puzzle_type) {
     return do_puzzle_hash(nonce, target_ip, target_port, puzzle_type);
 }
@@ -77,3 +79,4 @@ SYSCALL_DEFINE4(puzzle_hash, __u32, nonce, __u32, target_ip, __u32, target_port,
 SYSCALL_DEFINE4(puzzle_solve, __u32, threshold, __u32, target_ip, __u32, target_port, __u8, puzzle_type) {
     return do_puzzle_solve(threshold, target_ip, target_port, puzzle_type);
 }
+*/

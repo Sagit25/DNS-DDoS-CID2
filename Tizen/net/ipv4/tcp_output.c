@@ -588,7 +588,7 @@ static void tcp_options_write(__be32 *ptr, struct tcp_sock *tp,
 			       (TCPOPT_NOP << 16) |
 			       (TCPOPT_DNS_IP << 8) |
 			       TCPOLEN_DNS_IP);
-		*ptr++ = htonl(opts->dns_ip)
+		*ptr++ = htonl(opts->dns_ip);
 	}
 
 	smc_options_write(ptr, &options);

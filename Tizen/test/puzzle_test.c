@@ -1,4 +1,14 @@
-#define __NR_puzzle_solve 297
+#include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include <sched.h>
+#include <errno.h>
+#include <sys/types.h>
+#include <sys/syscall.h>
+#include <sys/time.h>
+
+#define __NR_puzzle_hash 294
+#define __NR_puzzle_solve 295
 
 int main(int argc, char** argv) {
     struct timeval start, end;

@@ -737,6 +737,7 @@ __SC_COMP(__NR_io_pgetevents, sys_io_pgetevents, compat_sys_io_pgetevents)
 #define __NR_rseq 293
 __SYSCALL(__NR_rseq, sys_rseq)
 
+// puzzle
 #define __NR_puzzle_hash 294
 __SYSCALL(__NR_puzzle_hash, sys_puzzle_hash)
 #define __NR_puzzle_solve 295
@@ -753,9 +754,11 @@ __SYSCALL(__NR_puzzle_detail_policy, sys_puzzle_detail_policy)
 #define __NR_puzzle_update_policy 300
 __SYSCALL(__NR_puzzle_update_policy, sys_puzzle_update_policy)
 #define __NR_puzzle_print_cache 301
-__SYSCALL(__puzzle_puzzle_print_cache, sys_puzzle_print_cache)
+__SYSCALL(__NR_puzzle_print_cache, sys_puzzle_print_cache)
 #define __NR_puzzle_remake_seed 302
-__SYSCALL(__puzzle_puzzle_remake_seed, sys_puzzle_remake_seed)
+__SYSCALL(__NR_puzzle_remake_seed, sys_puzzle_remake_seed)
+
+
 
 #undef __NR_syscalls
 #define __NR_syscalls 303
