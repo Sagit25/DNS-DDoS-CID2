@@ -812,25 +812,6 @@ static unsigned int tcp_established_options(struct sock *sk, struct sk_buff *skb
 	return size;
 }
 
-static unsigned int tcp_puzzle_options(struct sock *sk, struct sk_buff *skb,
-						struct tcp_hdr *th, struct tcp_out_options *opts)
-{
-	if(th->syn) {
-		if(!(th->ack)) {
-			struct puzzle_cache* cache;
-			if(!find_puzzle_cache(th->dest)) {
-				without_puzzle;
-			}
-		}
-	}
-
-with_puzzle:
-	return TCPOLEN_PUZZLE_DATA_ALIGNED;
-without_puzzle:
-	return 0;
-}
-
-
 /* TCP SMALL QUEUES (TSQ)
  *
  * TSQ goal is to keep small amount of skbs per tcp flow in tx queues (qdisc+dev)
@@ -1179,20 +1160,20 @@ static int __tcp_transmit_skb(struct sock *sk, struct sk_buff *skb,
 
 	if((tcb->tcp_flags & TCPHDR_SYN) && !(tcb->tcp_flags & TCPHDR_ACK)) {
 		struct puzzle_cache* cache;
-		u32* dns_ip, dns_port;
-		get_puzzle_dns(dns_ip, dns_port);
+		u32 dns_ip, dns_port;
+		get_puzzle_dns(&dns_ip, &dns_port);
 		if(find_puzzle_cache(ih->daddr, &cache)) {
-			opts->puzzle_type = cache->puzzle_type;
-			opts->puzzle = cache->puzzle;
-			opts->nonce = do_puzzle_solve(cache->threshold, cache->puzzle, ih->saddr, 0, cache->puzzle_type);
-			opts->dns_ip = *dns_ip;
+			opts.puzzle_type = cache->puzzle_type;
+			opts.puzzle = cache->puzzle;
+			opts.nonce = do_puzzle_solve(cache->threshold, cache->puzzle, ih->saddr, 0, cache->puzzle_type);
+			opts.dns_ip = dns_ip;
 		}
 	} else {
 		struct puzzle_policy* policy;
-		if(find_puzzle_policy, ih->daddr, &policy) {
-			opts->puzzle_type = get_puzzle_type();
-			opts->puzzle = (puzzle_type == PZLTYPE_LOCAL) ? generate_new_seed(ih->daddr) : 0;
-			opts->threshold = policy->threshold;
+		if(find_puzzle_policy(ih->daddr, &policy)) {
+			opts.puzzle_type = get_puzzle_type();
+			opts.puzzle = (opts.puzzle_type == PZLTYPE_LOCAL) ? generate_new_seed(ih->daddr) : 0;
+			opts.threshold = policy->threshold;
 		}
 	}
 

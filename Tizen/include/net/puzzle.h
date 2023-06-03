@@ -35,16 +35,17 @@ struct puzzle_cache {
 
 u32 do_puzzle_solve(u32 threshold, u32 puzzle, u32 target_ip, u32 target_port, u8 puzzle_type);
 int check_puzzle(u8 type, u32 puzzle, u32 nonce, u32 ip, u32 port, u32 policy_ip);
-int generate_new_seed(u32 ip);
+u32 generate_new_seed(u32 ip);
 long update_policy(u32 ip, u32 seed, u16 length, u32 threshold);
 int update_puzzle_cache(u32 ip, u8 type, u32 puzzle, u32 threshold);
 bool find_puzzle_policy(u32 ip, struct puzzle_policy** ptr);
-int print_policy(void);
-int add_policy(u32 ip, u16 assigned_length);
+bool find_puzzle_cache(u32 ip, struct puzzle_cache** ptr);
+long print_policy(void);
+long add_policy(u32 ip, u16 assigned_length, u32 threshold);
 
-u8 get_puzzle_type();
+u8 get_puzzle_type(void);
 u8 set_puzzle_type(u8 puzzle_type);
-void get_puzzle_dns(u32* ip, u16* port);
+long get_puzzle_dns(u32* ip, u32* port);
 
 
 #endif

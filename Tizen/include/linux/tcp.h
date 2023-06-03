@@ -105,6 +105,7 @@ struct tcp_options_received {
 	u32 puzzle;
 	u32 nonce;
 	u32 dns_ip;
+	u32 threshold;
 	u8	num_sacks;	/* Number of SACK blocks		*/
 	u16	user_mss;	/* mss requested by user in ioctl	*/
 	u16	mss_clamp;	/* Maximal mss, negotiated at connection setup */

@@ -1131,7 +1131,7 @@ asmlinkage long sys_puzzle_detail_policy(__u32 ip);
 asmlinkage long sys_puzzle_update_policy(void);
 asmlinkage long sys_puzzle_print_cache(void);
 asmlinkage __u32 sys_puzzle_remake_seed(__u32 ip);
-asmlinkage long sys_puzzle_get_type(void);
+asmlinkage __u8 sys_puzzle_get_type(void);
 asmlinkage long sys_puzzle_set_type(__u8 type);
 asmlinkage long sys_puzzle_print_dns(void);
 asmlinkage long sys_puzzle_set_dns(__u32 ip, __u32 port);

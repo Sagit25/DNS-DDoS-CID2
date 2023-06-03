@@ -5502,22 +5502,19 @@ static int tcp_check_puzzle_for_syn_packet(struct sock *sk, struct sk_buff *skb,
 {
 	struct tcp_sock *tp = tcp_sk(sk);
 	struct tcp_fastopen_cookie foc = { .len = -1 };
-
 	struct iphdr * ih = ip_hdr(skb); 
-	
-	struct puzzle_policy * policy;
 	u32 policy_ip;
 
 	tcp_parse_options(sock_net(sk), skb, &tp->rx_opt, 0, &foc);
-	switch(tp->rx_opt->puzzle_type) {
+	switch(tp->rx_opt.puzzle_type) {
 	case PZLTYPE_DNS:
-		policy_ip = tp->rx_opt->dns_ip;
+		policy_ip = tp->rx_opt.dns_ip;
 		break;
 	default:
 		policy_ip = ih->saddr;
 	}
 
-	return check_puzzle(tp->rx_opt->puzzle_type, ntohl(ih->saddr), 0, ntohl(policy_ip));
+	return check_puzzle(tp->rx_opt.puzzle_type, tp->rx_opt.puzzle, tp->rx_opt.nonce, ntohl(ih->saddr), 0, ntohl(policy_ip));
 }
 
 
@@ -5525,12 +5522,11 @@ static int puzzle_data_updated(struct sock *sk, struct sk_buff *skb,
 					 const struct tcphdr *th)
 {
 	struct tcp_sock *tp = tcp_sk(sk);
-	struct tcp_fastopen_cookie foc = { .len = -1 }
-
+	struct tcp_fastopen_cookie foc = { .len = -1 };
 	struct iphdr * ih = ip_hdr(skb);
 
 	tcp_parse_options(sock_net(sk), skb, &tp->rx_opt, 0, &foc);
-	return update_puzzle_cache(ih->daddr, tp->rx_opt->puzzle_type, tp->rx_opt->puzzle, tp->rx_opt->threshold);
+	return update_puzzle_cache(ih->daddr, tp->rx_opt.puzzle_type, tp->rx_opt.puzzle, tp->rx_opt.threshold);
 }
 
 /*

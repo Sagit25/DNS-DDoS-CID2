@@ -190,7 +190,7 @@ void tcp_time_wait(struct sock *sk, int state, int timeo);
 #define TCPOPT_PUZZLE		12
 #define TCPOPT_NONCE		13
 #define TCPOPT_DNS_IP		14
-#define TCOOPT_THRESHOLD	15
+#define TCPOPT_THRESHOLD	15
 /* Magic number to be after the option value for sharing TCP
  * experimental options. See draft-ietf-tcpm-experimental-options-00.txt
  */

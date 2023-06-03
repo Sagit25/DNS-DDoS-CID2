@@ -764,7 +764,7 @@ __SYSCALL(__NR_puzzle_set_type, sys_puzzle_set_type)
 #define __NR_puzzle_print_dns 305
 __SYSCALL(__NR_puzzle_print_dns, sys_puzzle_print_dns)
 #define __NR_puzzle_set_dns 306
-__SYSCALL(__NR_puzzle_set_dns, sys_puzzle_set_dns_info)
+__SYSCALL(__NR_puzzle_set_dns, sys_puzzle_set_dns)
 
 
 
