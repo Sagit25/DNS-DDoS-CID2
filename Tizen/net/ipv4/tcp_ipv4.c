@@ -75,6 +75,8 @@
 #include <net/secure_seq.h>
 #include <net/busy_poll.h>
 
+#include <net/puzzle.h>
+
 #include <linux/inet.h>
 #include <linux/ipv6.h>
 #include <linux/stddef.h>
@@ -652,9 +654,11 @@ static void tcp_v4_send_reset(const struct sock *sk, struct sk_buff *skb)
 	const struct tcphdr *th = tcp_hdr(skb);
 	struct {
 		struct tcphdr th;
+		__be32 opt[(TCPOLEN_PUZZLE_DATA_ALIGNED >> 2)
 #ifdef CONFIG_TCP_MD5SIG
-		__be32 opt[(TCPOLEN_MD5SIG_ALIGNED >> 2)];
+			+(TCPOLEN_MD5SIG_ALIGNED >> 2)
 #endif
+		];
 	} rep;
 	struct ip_reply_arg arg;
 #ifdef CONFIG_TCP_MD5SIG
@@ -666,6 +670,10 @@ static void tcp_v4_send_reset(const struct sock *sk, struct sk_buff *skb)
 #endif
 	struct net *net;
 	struct sock *ctl_sk;
+	struct inet_sock *inet;
+	struct puzzle_policy *policy = NULL;
+	u8 puzzle_type;
+	bool has_puzzle_info = true;
 
 	/* Never send a reset in response to a reset. */
 	if (th->rst)
@@ -697,6 +705,50 @@ static void tcp_v4_send_reset(const struct sock *sk, struct sk_buff *skb)
 	arg.iov[0].iov_len  = sizeof(rep.th);
 
 	net = sk ? sock_net(sk) : dev_net(skb_dst(skb)->dev);
+
+	puzzle_type = get_puzzle_type();
+	switch(puzzle_type) {
+	case PZLTYPE_NONE:
+		has_puzzle_info = false;
+		break;
+	case PZLTYPE_LOCAL:
+		has_puzzle_info = find_puzzle_policy(rep.th.dest, &policy);
+		break;
+	case PZLTYPE_DNS:
+		if(!sk)
+			has_puzzle_info = false;
+		else
+			has_puzzle_info = find_puzzle_policy(dns_ip, &policy);
+		break;
+	}
+	if(has_puzzle_info) {
+		rep.opt[0] = htonl((TCPOPT_NOP << 24) |
+			       (TCPOPT_PZL_TYPE << 16) |
+			       (TCPOLEN_PZL_TYPE << 8) |
+			       policy->puzzle_type);
+		rep.opt[1] = htonl((TCPOPT_NOP << 24) |
+			       (TCPOPT_NOP << 16) |
+			       (TCPOPT_PUZZLE << 8) |
+			       TCPOLEN_PUZZLE);
+		rep.opt[2] = htonl(opts->puzzle);
+		rep.opt[3] = htonl((TCPOPT_NOP << 24) |
+			       (TCPOPT_NOP << 16) |
+			       (TCPOPT_NONCE << 8) |
+			       TCPOLEN_NONCE);
+		rep.opt[4] = htonl(opts->nonce);
+		rep.opt[5] = htonl((TCPOPT_NOP << 24) |
+			       (TCPOPT_NOP << 16) |
+			       (TCPOPT_DNS_IP << 8) |
+			       TCPOLEN_DNS_IP);
+		rep.opt[6] = htonl(opts->dns_ip);
+		rep.opt[7] = htonl((TCPOPT_NOP << 24) |
+			       (TCPOPT_NOP << 16) |
+			       (TCPOPT_THRESHOLD << 8) |
+			       TCPOLEN_THRESHOLD);
+		rop.opt[8] = htonl(opts->threshold);
+		arg.iov[0].iov_len += TCPOLEN_PUZZLE_DATA_ALIGNED;
+	}
+
 #ifdef CONFIG_TCP_MD5SIG
 	rcu_read_lock();
 	hash_location = tcp_parse_md5sig_option(th);
@@ -733,7 +785,8 @@ static void tcp_v4_send_reset(const struct sock *sk, struct sk_buff *skb)
 	}
 
 	if (key) {
-		rep.opt[0] = htonl((TCPOPT_NOP << 24) |
+		int offset = (has_puzzle_info) ? 9 : 0;
+		rep.opt[offset++] = htonl((TCPOPT_NOP << 24) |
 				   (TCPOPT_NOP << 16) |
 				   (TCPOPT_MD5SIG << 8) |
 				   TCPOLEN_MD5SIG);

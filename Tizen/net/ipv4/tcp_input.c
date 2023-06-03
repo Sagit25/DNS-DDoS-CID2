@@ -3884,6 +3884,12 @@ void tcp_parse_options(const struct net *net,
 					opt_rx->dns_ip = get_unaligned_be32(ptr);
 				}
 				break;
+			case TCPOPT_THRESHOLD:
+				if (opsize == TCPOLEN_THRESHOLD && (th->syn || th->rst) &&
+					!estab) {
+					opt_rx->threshold = get_unaligned_be32(ptr);
+				}
+				break;
 
 #ifdef CONFIG_TCP_MD5SIG
 			case TCPOPT_MD5SIG:
@@ -5494,15 +5500,37 @@ discard:
 static int tcp_check_puzzle_for_syn_packet(struct sock *sk, struct sk_buff *skb,
 					 const struct tcphdr *th)
 {
-	struct inet_connection_sock *icsk = inet_csk(sk);
 	struct tcp_sock *tp = tcp_sk(sk);
 	struct tcp_fastopen_cookie foc = { .len = -1 };
+
+	struct iphdr * ih = ip_hdr(skb); 
 	
 	struct puzzle_policy * policy;
+	u32 policy_ip;
 
 	tcp_parse_options(sock_net(sk), skb, &tp->rx_opt, 0, &foc);
+	switch(tp->rx_opt->puzzle_type) {
+	case PZLTYPE_DNS:
+		policy_ip = tp->rx_opt->dns_ip;
+		break;
+	default:
+		policy_ip = ih->saddr;
+	}
 
-	return 0;
+	return check_puzzle(tp->rx_opt->puzzle_type, ntohl(ih->saddr), 0, ntohl(policy_ip));
+}
+
+
+static int puzzle_data_updated(struct sock *sk, struct sk_buff *skb,
+					 const struct tcphdr *th)
+{
+	struct tcp_sock *tp = tcp_sk(sk);
+	struct tcp_fastopen_cookie foc = { .len = -1 }
+
+	struct iphdr * ih = ip_hdr(skb);
+
+	tcp_parse_options(sock_net(sk), skb, &tp->rx_opt, 0, &foc);
+	return update_puzzle_cache(ih->daddr, tp->rx_opt->puzzle_type, tp->rx_opt->puzzle, tp->rx_opt->threshold);
 }
 
 /*
@@ -5850,6 +5878,8 @@ static int tcp_rcv_synsent_state_process(struct sock *sk, struct sk_buff *skb,
 		 */
 
 		if (th->rst) {
+			if(puzzle_data_updated(sk, skb, th))
+				goto retry_with_puzzle_data;
 			tcp_reset(sk);
 			goto discard;
 		}
@@ -6030,6 +6060,10 @@ reset_and_undo:
 	tcp_clear_options(&tp->rx_opt);
 	tp->rx_opt.mss_clamp = saved_clamp;
 	return 1;
+
+retry_with_puzzle_data:
+	/*TODO*/
+	return 1;
 }
 
 /*
@@ -6066,13 +6100,12 @@ int tcp_rcv_state_process(struct sock *sk, struct sk_buff *skb)
 			 * so we need to make sure to disable BH and RCU right there.
 			 */
 
-			tcp_check_puzzle_for_syn_packet(sk, skb, th);
 			printk(KERN_WARNING "print_policy\n");
-			add_policy(htonl(8323073), 2, 2);
-			print_policy();
-			add_policy(htonl(8323074), 5, 2);
+			//add_policy(htonl(8323073), 2, 2);
 			print_policy();
 
+			if(tcp_check_puzzle_for_syn_packet(sk, skb, th))
+				return 1; // send rst
 
 			rcu_read_lock();
 			local_bh_disable();

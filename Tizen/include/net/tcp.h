@@ -190,6 +190,7 @@ void tcp_time_wait(struct sock *sk, int state, int timeo);
 #define TCPOPT_PUZZLE		12
 #define TCPOPT_NONCE		13
 #define TCPOPT_DNS_IP		14
+#define TCOOPT_THRESHOLD	15
 /* Magic number to be after the option value for sharing TCP
  * experimental options. See draft-ietf-tcpm-experimental-options-00.txt
  */
@@ -213,6 +214,7 @@ void tcp_time_wait(struct sock *sk, int state, int timeo);
 #define TCPOLEN_PUZZLE	       6
 #define TCPOLEN_NONCE	       6
 #define TCPOLEN_DNS_IP	       6
+#define TCPOLEN_THRESHOLD      6
 
 /* But this is what stacks really send out. */
 #define TCPOLEN_TSTAMP_ALIGNED		12
@@ -224,6 +226,7 @@ void tcp_time_wait(struct sock *sk, int state, int timeo);
 #define TCPOLEN_MD5SIG_ALIGNED		20
 #define TCPOLEN_MSS_ALIGNED		4
 #define TCPOLEN_EXP_SMC_BASE_ALIGNED	8
+#define TCPOLEN_PUZZLE_DATA_ALIGNED	36
 
 /* Flags in tp->nonagle */
 #define TCP_NAGLE_OFF		1	/* Nagle's algo is disabled */

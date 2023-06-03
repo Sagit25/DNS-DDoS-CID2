@@ -4,11 +4,8 @@
 #include <linux/list.h>
 
 #define PZLTYPE_NONE 1
-#define PZLTYPE_COPY 2
-#define PZLTYPE_INC 3
-
-#define PZLTYPE_DNS_COPY 21
-#define PZLTYPE_DNS_INC 22
+#define PZLTYPE_LOCAL 2
+#define PZLTYPE_DNS 3
 
 #define PZLTYPE_MAX 63
 
@@ -17,12 +14,12 @@
 
 struct puzzle_policy {
 	u32 ip;
-	u8 puzzle_type;
+	u32 threshold;
 	u32 seed;
 	u32 seed_old;
 	u16 assigned_length;
 	u16 latest_pos; 
-	u8 spare_gap;
+	u16 spare_gap;
 
 	struct list_head list;
 };
@@ -31,22 +28,23 @@ struct puzzle_cache {
 	u32 ip;
 	u8 puzzle_type;
 	u32 puzzle;
+	u32 threshold;
 
 	struct list_head list;
 };
 
-extern u32 dns_ip;
-
-u32 solve_puzzle(u8 type, u32 puzzle, u32 client_ip, u32 ip);
-u32 check_puzzle(u8 type, u32 puzzle, u32 nonce, u32 client_ip, u32 ip);
+u32 do_puzzle_solve(u32 threshold, u32 puzzle, u32 target_ip, u32 target_port, u8 puzzle_type);
+int check_puzzle(u8 type, u32 puzzle, u32 nonce, u32 ip, u32 port, u32 policy_ip);
 int generate_new_seed(u32 ip);
-bool find_pos_of_puzzle(u32 ip, u32 puzzle, u16* pos);
-int update_policy_type(u32 ip, u8 type);
-int update_policy_length(u32 ip, u16 length);
-int update_puzzle_cache(u32 ip, u32 puzzle_type, u32 puzzle);
-
+long update_policy(u32 ip, u32 seed, u16 length, u32 threshold);
+int update_puzzle_cache(u32 ip, u8 type, u32 puzzle, u32 threshold);
+bool find_puzzle_policy(u32 ip, struct puzzle_policy** ptr);
 int print_policy(void);
-int add_policy(u32 ip, u8 puzzle_type, u16 assigned_length);
+int add_policy(u32 ip, u16 assigned_length);
+
+u8 get_puzzle_type();
+u8 set_puzzle_type(u8 puzzle_type);
+void get_puzzle_dns(u32* ip, u16* port);
 
 
 #endif

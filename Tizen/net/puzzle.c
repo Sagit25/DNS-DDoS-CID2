@@ -1,16 +1,27 @@
 #include <linux/kernel.h>
 #include <linux/slab.h>
 #include <linux/syscalls.h>
-#include <net/puzzle.h>
-
 #include <linux/linkage.h>
 #include <linux/types.h>
-#include <crypto/hash.h>
+#include <net/puzzle.h>
+#include <netinet/in.h>
 
+#include <crypto/hash.h>
 
 // added by junjinyong
 #define PLAIN_LENGTH 17
 #define SHA256_LENGTH 32
+
+static const u32 NOT_FOUND = 500;
+
+LIST_HEAD(policy_head);
+LIST_HEAD(cache_head);
+static struct puzzel_dns_info {
+    u32 ip;
+    u32 port;
+} puzzle_dns = {0, 0};
+static u8 puzzle_type = PZLTYPE_NONE;
+static u32 last_seed = 1;
 
 __u32 do_puzzle_hash(__u32 nonce, __u32 puzzle, __u32 target_ip, __u32 target_port, __u8 puzzle_type) {
     unsigned char plaintext[PLAIN_LENGTH];
@@ -67,8 +78,11 @@ __u32 do_puzzle_hash(__u32 nonce, __u32 puzzle, __u32 target_ip, __u32 target_po
     }
     return result;
 }
+SYSCALL_DEFINE5(puzzle_hash, __u32, nonce, __u32, puzzle, __u32, target_ip, __u32, target_port, __u8, puzzle_type) {
+    return do_puzzle_hash(nonce, puzzle, target_ip, target_port, puzzle_type);
+}
 
-__u32 do_puzzle_solve(__u32 threshold, __u32 puzzle, __u32 target_ip, __u32 target_port, __u8 puzzle_type) {
+u32 do_puzzle_solve(__u32 threshold, __u32 puzzle, __u32 target_ip, __u32 target_port, __u8 puzzle_type) {
     __u32 nonce;
     for(nonce = 1; nonce > 0; ++nonce) {
         if(do_puzzle_hash(nonce, puzzle, target_ip, target_port, puzzle_type) < threshold) {
@@ -77,64 +91,12 @@ __u32 do_puzzle_solve(__u32 threshold, __u32 puzzle, __u32 target_ip, __u32 targ
     }
     return 0;
 }
-
-SYSCALL_DEFINE5(puzzle_hash, __u32, nonce, __u32, puzzle, __u32, target_ip, __u32, target_port, __u8, puzzle_type) {
-    return do_puzzle_hash(nonce, puzzle, target_ip, target_port, puzzle_type);
-}
-
-
+EXPORT_SYMBOL(do_puzzle_solve);
 SYSCALL_DEFINE5(puzzle_solve, __u32, threshold, __u32, puzzle, __u32, target_ip, __u32, target_port, __u8, puzzle_type) {
     return do_puzzle_solve(threshold, puzzle, target_ip, target_port, puzzle_type);
 }
 
-
-//
-
-
-
-static inline u8 __down_to_u8(u16 val) {
-    return (u8)(val < MAX_SPARE_GAP ? val : MAX_SPARE_GAP);
-}
-
-static const u32 NOT_FOUND = 500;
-
-LIST_HEAD(policy_head);
-LIST_HEAD(cache_head);
-u32 dns_ip = 0;
-EXPORT_SYMBOL(dns_ip);
-
-u32 solve_puzzle(u8 type, u32 puzzle, u32 ip, u32 sub_ip) {
-
-    u32 nonce = 0;
-
-    switch(type) {
-        case PZLTYPE_NONE:
-            goto no_puzzle;
-
-        case PZLTYPE_COPY:
-        case PZLTYPE_INC:
-        case PZLTYPE_DNS_COPY:
-        case PZLTYPE_DNS_INC:
-            return do_puzzle_solve(4096, puzzle, ip, sub_ip, type);
-    }    
-no_puzzle:
-    return 0;
-}
-EXPORT_SYMBOL(solve_puzzle);
-
-
-
-bool check_nonce(u8 type, u32 puzzle, u32 nonce, u32 ip, u32 sub_ip) {
-    printk(KERN_INFO "type : %u, puzzle : %u, nonce : %u", type, puzzle, nonce);
-    return do_puzzle_hash(nonce, puzzle, ip, sub_ip, type);
-}
-
-u32 __generate_seed(u8 type, u32 ip) {
-    /* TODO */
-    return 10;
-}
-
-static bool find_puzzle_policy(u32 ip, struct puzzle_policy** ptr) {
+bool find_puzzle_policy(u32 ip, struct puzzle_policy** ptr) {
     struct puzzle_policy* policy;
     struct list_head* head;
     list_for_each(head, &policy_head) {
@@ -147,6 +109,7 @@ static bool find_puzzle_policy(u32 ip, struct puzzle_policy** ptr) {
 
     return false;
 }
+EXPORT_SYMBOL(find_puzzle_policy);
 
 static bool find_puzzle_cache(u32 ip, struct puzzle_cache** ptr) {
     struct puzzle_cache* cache;
@@ -163,20 +126,32 @@ static bool find_puzzle_cache(u32 ip, struct puzzle_cache** ptr) {
 }
 
 static void __print_policy_detail(struct puzzle_policy* policy) {
+    u32 ip = htonl(policy->ip);
 
-    printk(KERN_INFO "ip : %u.%u.%u.%u type : %d\n"
-                , (policy->ip       )%256
-                , (policy->ip  >>  8)%256
-                , (policy->ip  >> 16)%256
-                , (policy->ip  >> 24), policy->puzzle_type);
+    printk(KERN_INFO "ip : %u.%u.%u.%u "
+                , (ip       )%256
+                , (ip  >>  8)%256
+                , (ip  >> 16)%256
+                , (ip  >> 24));
     printk(KERN_INFO "    | seed : %u , old_seed : %u\n", policy->seed, policy->seed_old);
     printk(KERN_INFO "    | assigned length : %u\n,", policy->assigned_length);
     printk(KERN_INFO "    | available : %u + %u\n,", policy->latest_pos, policy->spare_gap);
 }
 
-int print_policy_detail(u32 ip) {
+long print_policy_detail(u32 ip) {
     struct puzzle_policy* policy;
-    printk(KERN_INFO "--puzzle_policy_detail--\n");
+    printk(KERN_INFO "--puzzle_policy_detail---");
+    switch(puzzle_type) {
+    case PZLTYPE_NONE: 
+        printk(KERN_INFO "NONE--\n")
+        break;
+    case PZLTYPE_LOCAL: 
+        printk(KERN_INFO "LOCAL-\n")
+        break;
+    case PZLTYPE_DNS: 
+        printk(KERN_INFO "DNS---\n")
+        break;
+    }
     if(find_puzzle_policy(ip, &policy))
         __print_policy_detail(policy);
     else
@@ -185,17 +160,28 @@ int print_policy_detail(u32 ip) {
     return 1;
 }
 
-SYSCALL_DEFINE1(puzzle_detail_policy, u32, ip)
+SYSCALL_DEFINE1(puzzle_detail_policy, __u32, ip)
 {
     return print_policy_detail(ip);
 }
 
 
-int print_policy(void) {
+long print_policy(void) {
     struct puzzle_policy* policy;
     struct list_head* ptr;
     int count = 0;
-    printk(KERN_WARNING "--puzzle_policy_all-----\n");
+    printk(KERN_WARNING "--puzzle_policy_all---");
+    switch(puzzle_type) {
+    case PZLTYPE_NONE: 
+        printk(KERN_INFO "NONE--\n")
+        break;
+    case PZLTYPE_LOCAL: 
+        printk(KERN_INFO "LOCAL-\n")
+        break;
+    case PZLTYPE_DNS: 
+        printk(KERN_INFO "DNS---\n")
+        break;
+    }
     list_for_each(ptr, &policy_head) {
         policy = list_entry(ptr, struct puzzle_policy, list);
         __print_policy_detail(policy);
@@ -211,18 +197,20 @@ SYSCALL_DEFINE0(puzzle_print_policy)
     return print_policy();
 }
 
-int print_cache(void) {
+long print_cache(void) {
     struct puzzle_cache* cache;
     struct list_head* ptr;
+    u32 ip;
     int count = 0;
     printk(KERN_INFO "--puzzle_cache-----\n");
     list_for_each(ptr, &cache_head) {
         cache = list_entry(ptr, struct puzzle_cache, list);
+        ip = htonl(ip);
         printk(KERN_INFO "ip : %u.%u.%u.%u type : %d\n"
-                    , (cache->ip       )%256
-                    , (cache->ip  >>  8)%256
-                    , (cache->ip  >> 16)%256
-                    , (cache->ip  >> 24), cache->puzzle_type);
+                    , (ip       )%256
+                    , (ip  >>  8)%256
+                    , (ip  >> 16)%256
+                    , (ip  >> 24), cache->puzzle_type);
         printk(KERN_INFO "    | stored_puzzle : %u\n", cache->puzzle);
         count ++;
     }
@@ -237,7 +225,7 @@ SYSCALL_DEFINE0(puzzle_print_cache)
 }
 
 
-int add_policy(u32 ip, u8 puzzle_type, u16 assigned_length) {
+long add_policy(u32 ip, u16 assigned_length, u32 threshold) {
     struct puzzle_policy* policy;
     if(find_puzzle_policy(ip, &policy))
         return -1;
@@ -246,58 +234,53 @@ int add_policy(u32 ip, u8 puzzle_type, u16 assigned_length) {
     memset(policy, 0, sizeof(*policy));
 
     policy->ip = ip;
-    policy->puzzle_type = puzzle_type;
-    policy-> assigned_length = 2;
+    policy->assigned_length = 2;
+    policy->threshold = threshold
 
     list_add_tail(&(policy->list), &policy_head);
-
 
     return 0;
 }
 EXPORT_SYMBOL(add_policy);
-SYSCALL_DEFINE3(puzzle_add_policy, u32, ip, u8, puzzle_type, u16, assigned_length)
+SYSCALL_DEFINE3(puzzle_add_policy, __u32, ip, __u16, assigned_length, __u32, threshold)
 {
-    return add_policy(ip, puzzle_type, assigned_length);
+    return add_policy(ip, assigned_length, threshold);
 }
 
-static void update_to_new_seed(struct puzzle_policy* policy, u32 new_seed) {
+static u32 update_to_new_seed(struct puzzle_policy* policy, u32 new_seed) {
 
     policy->seed_old = policy->seed;
     policy->seed = new_seed;
-    policy->spare_gap = __down_to_u8(policy->latest_pos);
+    policy->spare_gap = policy->latest_pos;
     policy->latest_pos = policy->assigned_length;
+    return new_seed;
 }
 
-int generate_new_seed(u32 ip) {
+u32 generate_new_seed(u32 ip) {
     struct puzzle_policy* policy;
     if(find_puzzle_policy(ip, &policy))
         return -1;
-
-    update_to_new_seed(policy, __generate_seed(policy->puzzle_type, policy->ip));
-    return 0;
+    last_seed = do_puzzle_hash(0, last_seed, ip, policy->seed, puzzle_type);
+    return update_to_new_seed(policy, __generate_seed(ip));
 
 }
 EXPORT_SYMBOL(generate_new_seed);
-SYSCALL_DEFINE1(puzzle_remake_seed, u32, ip)
+SYSCALL_DEFINE1(puzzle_remake_seed, __u32, ip)
 {
     return generate_new_seed(ip);
 }
 
-
-
-bool find_pos_of_puzzle(u32 ip, u32 puzzle, u16* pos) {
-    struct puzzle_policy* policy;
+static u32 find_pos_of_puzzle(struct puzzle_policy* policy, u32 puzzle) {
     u32 hash_value, iter, acceptable_pos;
     iter = 0;
-    *pos = NOT_FOUND;
-    if(unlikely(!find_puzzle_policy(ip, &policy))) 
-        return false;
+    u32 pos = NOT_FOUND;
+
     hash_value = policy->seed;
     acceptable_pos = policy->latest_pos + policy->spare_gap;
     while( iter < policy->assigned_length ) {
         if(hash_value == puzzle) {
-            if(*pos == NOT_FOUND || iter < acceptable_pos)
-                *pos = iter;
+            if(pos == NOT_FOUND || iter < acceptable_pos)
+                pos = iter;
         }
         iter ++;
         hash_value = do_puzzle_hash(hash_value, 0, 0, 0, 0);
@@ -305,14 +288,13 @@ bool find_pos_of_puzzle(u32 ip, u32 puzzle, u16* pos) {
     hash_value = policy->seed;
     while( iter < acceptable_pos ) {
         if(hash_value == puzzle) {
-            *pos = iter;
+            pos = iter;
         }
         iter++;
         hash_value = do_puzzle_hash(hash_value, 0, 0, 0, 0);
     }
-    return true;
+    return pos;
 }
-EXPORT_SYMBOL(find_pos_of_puzzle);
 
 int update_policy_from_config(void) {
     //TODO
@@ -323,7 +305,7 @@ SYSCALL_DEFINE0(puzzle_update_policy)
     return update_policy_from_config();
 }
 
-int update_policy(u32 ip, u8 type, u32 seed, u16 length) {
+long update_policy(u32 ip, u8 type, u32 seed, u16 length, u32 threshold) {
     struct puzzle_policy* policy;
     if(unlikely(!find_puzzle_policy(ip, &policy)))
         return -1;
@@ -343,30 +325,139 @@ int update_policy(u32 ip, u8 type, u32 seed, u16 length) {
         update_to_new_seed(policy, seed);
     }
 
+    if(threshold) {
+        policy->threshold = threshold;
+    }
+
     return 0;
 }
-
-SYSCALL_DEFINE4(puzzle_edit_policy, u32, ip, u8, puzzle_type, u32, seed, u16, assigned_length)
+EXPORT_SYMBOL(update_policy);
+SYSCALL_DEFINE4(puzzle_edit_policy, __u32, ip, __u32, seed, __u16, assigned_length, __u32, threshold)
 {
-    return update_policy(ip, puzzle_type, seed, assigned_length);
+    return update_policy(ip, seed, assigned_length, threshold);
 }
-
-int update_policy_type(u32 ip, u8 type) {
-    return update_policy(ip, type, 0, 0);
-}
-EXPORT_SYMBOL(update_policy_type);
-
-int update_policy_length(u32 ip, u16 length) {
-   return update_policy(ip, 0, 0, length);
-}
-EXPORT_SYMBOL(update_policy_length);
-
-int update_puzzle_cache(u32 ip, u32 puzzle_type, u32 puzzle) {
+int check_puzzle(u8 type, u32 puzzle, u32 nonce, u32 ip, u32 port, u32 policy_ip) {
+    printk(KERN_INFO "type : %u, puzzle : %u, nonce : %u", type, puzzle, nonce);
     struct puzzle_policy* policy;
-    if(unlikely(!find_puzzle_policy(ip, &policy)))
-        return -1;
+    u32 pos;
+
+    if(unlikely(!find_puzzle_policy(policy_ip, &policy)))
+        return 0;
+    
+    if(unlikely(puzzle_type != type))
+        return 1;
+
+    pos = find_pos_of_puzzle(policy, puzzle, pos);
+    if(pos == NOT_FOUND || pos == (u32)latest_pos 
+        || pos >= (u32)lastest_pos + spare_gap)
+        return 1;
+
+    if(do_puzzle_hash(nonce, puzzle, ip, sub_ip, type) >= threshold)
+        return 1;
+
+    if(pos < (u32)(policy->latest_pos)) {
+        policy->spare_gap = policy->latest_pos - (u16) pos;
+        policy->latest_pos = (u16) pos;
+    } else {
+        policy->spare_gap = (u16) (pos - policy->latest_pos);
+    }
 
     return 0;
-    /*TODO*/
+}
+EXPORT_SYMBOL(check_puzzle);
+
+int update_puzzle_cache(u32 ip, u8 type, u32 puzzle, u32 threshold) {
+    struct puzzle_cache* cache;
+    int updated = 0;
+    if(unlikely(!find_puzzle_cache(ip, &cache))) {
+        if(type == PZLTYPE_NONE)
+            return 0;
+
+        cache = kmalloc(sizeof(*cache), GFP_KERNEL);
+        memset(cache, 0, sizeof(*cache));
+
+        cache->ip = ip;
+        cache->puzzle_type = type;
+        cache->puzzle = puzzle;
+        cache->threshold = threshold
+
+        list_add_tail(&(cache->list), &cache_head);
+        return 4;
+    }
+
+    if(type) {
+        if(type == PZLTYPE_NONE) {
+            list_del(&(cache->list));
+            kfree(cache);
+
+            return 4;
+        }
+        cache->puzzle_type = type;
+    }
+
+    if(puzzle && cache->puzzle != puzzle) {
+        updated ++;
+        cache->puzzle = puzzle;
+    }
+    if(threshold && cache->threshold != threshold) {
+        updated ++;
+        cache->threshold = threshold;
+    }
+
+    return updated;
 }
 EXPORT_SYMBOL(update_puzzle_cache);
+
+u8 get_puzzle_type() {
+    return puzzle_type;
+}
+EXPORT_SYMBOL(get_puzzle_type);
+SYSCALL_DEFINE0(puzzle_get_type) {
+    return (long)get_puzzle_type();
+}
+
+u8 set_puzzle_type(u8 type) {
+    switch(type) {
+    case PZLTYPE_NONE:
+    case PZLTYPE_LOCAL:
+    case PZLTYPE_DNS:
+        puzzle_type = type;
+        break;
+    default:
+        break;
+    }
+
+    return puzzle_type;
+}
+EXPORT_SYMBOL(set_puzzle_type);
+SYSCALL_DEFINE1(puzzle_get_type, __u8, type) {
+    return (long)set_puzzle_type(type);
+}
+
+long get_puzzle_dns(u32* ip, u32* port) {
+    *ip = puzzle_dns.ip;
+    *port = puzzle_dns.port;
+
+    return 0;
+}
+EXPORT_SYMBOL(dns_ip);
+
+long print_puzzle_dns(void) {
+    printk("ip : %I4, port: %u\n", puzzle_dns.ip, puzzle_dns.port);
+
+    return 0;
+}
+SYSCALL_DEFINE0(puzzle_print_dns) {
+    return print_puzzle_dns()
+}
+
+long set_puzzle_dns(u32 ip, u32 port); {
+    puzzle_dns.ip = ip;
+    puzzle_dns.port = port;
+
+    print_puzzle_dns();
+    return 0;
+}
+SYSCALL_DEFINE2(puzzle_print_dns, __u32, ip, __u32, port) {
+    return set_puzzle_dns(ip, port)
+}

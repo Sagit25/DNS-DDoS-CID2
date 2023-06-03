@@ -757,11 +757,19 @@ __SYSCALL(__NR_puzzle_update_policy, sys_puzzle_update_policy)
 __SYSCALL(__NR_puzzle_print_cache, sys_puzzle_print_cache)
 #define __NR_puzzle_remake_seed 302
 __SYSCALL(__NR_puzzle_remake_seed, sys_puzzle_remake_seed)
+#define __NR_puzzle_get_type 303
+__SYSCALL(__NR_puzzle_get_type, sys_puzzle_get_type)
+#define __NR_puzzle_set_type 304
+__SYSCALL(__NR_puzzle_set_type, sys_puzzle_set_type)
+#define __NR_puzzle_print_dns 305
+__SYSCALL(__NR_puzzle_print_dns, sys_puzzle_print_dns)
+#define __NR_puzzle_set_dns 306
+__SYSCALL(__NR_puzzle_set_dns, sys_puzzle_set_dns_info)
 
 
 
 #undef __NR_syscalls
-#define __NR_syscalls 303
+#define __NR_syscalls 307
 
 /*
  * 32 bit systems traditionally used different

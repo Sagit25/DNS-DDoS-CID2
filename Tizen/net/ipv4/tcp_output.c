@@ -37,6 +37,7 @@
 #define pr_fmt(fmt) "TCP: " fmt
 
 #include <net/tcp.h>
+#include <net/puzzle.h>
 
 #include <linux/compiler.h>
 #include <linux/gfp.h>
@@ -444,14 +445,10 @@ struct tcp_out_options {
 	__u32 puzzle;
 	__u32 nonce;
 	__u32 dns_ip;
+	__u32 threshold;
 
 	struct tcp_fastopen_cookie *fastopen_cookie;	/* Fast open cookie */
 };
-
-static void puzzle_options_write(struct tcphdr *th, __be32 *ptr, struct tcp_out_options *opts) {
-	/*TODO*/
-
-}
 
 /* Write previously computed TCP options to the packet.
  *
@@ -560,7 +557,7 @@ static void tcp_options_write(__be32 *ptr, struct tcp_sock *tp,
 		ptr += (len + 3) >> 2;
 	}
 
-		if (unlikely(opts->puzzle_type)) {
+	if (unlikely(opts->puzzle_type)) {
 		*ptr++ = htonl((TCPOPT_NOP << 24) |
 			       (TCPOPT_PZL_TYPE << 16) |
 			       (TCPOLEN_PZL_TYPE << 8) |
@@ -590,6 +587,15 @@ static void tcp_options_write(__be32 *ptr, struct tcp_sock *tp,
 			       TCPOLEN_DNS_IP);
 		*ptr++ = htonl(opts->dns_ip);
 	}
+
+	if (unlikely(opts->threshold)) {
+		*ptr++ = htonl((TCPOPT_NOP << 24) |
+			       (TCPOPT_NOP << 16) |
+			       (TCPOPT_THRESHOLD << 8) |
+			       TCPOLEN_THRESHOLD);
+		*ptr++ = htonl(opts->threshold);
+	}
+
 
 	smc_options_write(ptr, &options);
 }
@@ -804,6 +810,24 @@ static unsigned int tcp_established_options(struct sock *sk, struct sk_buff *skb
 	}
 
 	return size;
+}
+
+static unsigned int tcp_puzzle_options(struct sock *sk, struct sk_buff *skb,
+						struct tcp_hdr *th, struct tcp_out_options *opts)
+{
+	if(th->syn) {
+		if(!(th->ack)) {
+			struct puzzle_cache* cache;
+			if(!find_puzzle_cache(th->dest)) {
+				without_puzzle;
+			}
+		}
+	}
+
+with_puzzle:
+	return TCPOLEN_PUZZLE_DATA_ALIGNED;
+without_puzzle:
+	return 0;
 }
 
 
@@ -1066,8 +1090,11 @@ static int __tcp_transmit_skb(struct sock *sk, struct sk_buff *skb,
 	unsigned int tcp_options_size, tcp_header_size;
 	struct sk_buff *oskb = NULL;
 	struct tcp_md5sig_key *md5;
+	struct iphdr * ih = ip_hdr(skb);
 	struct tcphdr *th;
 	int err;
+
+
 
 	BUG_ON(!skb || !tcp_skb_pcount(skb));
 	tp = tcp_sk(sk);
@@ -1147,6 +1174,25 @@ static int __tcp_transmit_skb(struct sock *sk, struct sk_buff *skb,
 		} else if (after(tcb->seq + 0xFFFF, tp->snd_nxt)) {
 			th->urg_ptr = htons(0xFFFF);
 			th->urg = 1;
+		}
+	}
+
+	if((tcb->tcp_flags & TCPHDR_SYN) && !(tcb->tcp_flags & TCPHDR_ACK)) {
+		struct puzzle_cache* cache;
+		u32* dns_ip, dns_port;
+		get_puzzle_dns(dns_ip, dns_port);
+		if(find_puzzle_cache(ih->daddr, &cache)) {
+			opts->puzzle_type = cache->puzzle_type;
+			opts->puzzle = cache->puzzle;
+			opts->nonce = do_puzzle_solve(cache->threshold, cache->puzzle, ih->saddr, 0, cache->puzzle_type);
+			opts->dns_ip = *dns_ip;
+		}
+	} else {
+		struct puzzle_policy* policy;
+		if(find_puzzle_policy, ih->daddr, &policy) {
+			opts->puzzle_type = get_puzzle_type();
+			opts->puzzle = (puzzle_type == PZLTYPE_LOCAL) ? generate_new_seed(ih->daddr) : 0;
+			opts->threshold = policy->threshold;
 		}
 	}
 
