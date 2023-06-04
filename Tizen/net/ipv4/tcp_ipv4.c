@@ -707,15 +707,18 @@ static void tcp_v4_send_reset(const struct sock *sk, struct sk_buff *skb)
 
 	net = sk ? sock_net(sk) : dev_net(skb_dst(skb)->dev);
 
+	printk("sending reset\n");
 	puzzle_type = get_puzzle_type();
 	switch(puzzle_type) {
 	case PZLTYPE_NONE:
 		has_puzzle_info = false;
 		break;
 	case PZLTYPE_LOCAL:
-		has_puzzle_info = find_puzzle_policy(rep.th.dest, &policy);
-		puzzle = policy->seed;
-		threshold = policy->threshold;
+		if(find_puzzle_policy(rep.th.dest, &policy)) {
+			has_puzzle_info = true;
+			puzzle = get_last_hash_chain(policy);
+			threshold = policy->threshold;
+		}
 		break;
 	case PZLTYPE_DNS:
 		if(!sk)

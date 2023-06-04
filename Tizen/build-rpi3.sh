@@ -20,4 +20,4 @@ CROSS_COMPILER='ccache aarch64-linux-gnu-'
 make ARCH=arm64 CROSS_COMPILE="$CROSS_COMPILER" tizen_bcmrpi3_defconfig
 
 # Build kernel
-make ARCH=arm64 CROSS_COMPILE="$CROSS_COMPILER" -j$(nproc)
+make ARCH=arm64 CROSS_COMPILE="$CROSS_COMPILER" -j$(nproc) 2>&1 | tee build_log.txt

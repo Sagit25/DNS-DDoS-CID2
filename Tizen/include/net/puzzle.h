@@ -42,6 +42,7 @@ bool find_puzzle_policy(u32 ip, struct puzzle_policy** ptr);
 bool find_puzzle_cache(u32 ip, struct puzzle_cache** ptr);
 long print_policy(void);
 long add_policy(u32 ip, u16 assigned_length, u32 threshold);
+u32 get_last_hash_chain(struct puzzle_policy* policy);
 
 u8 get_puzzle_type(void);
 u8 set_puzzle_type(u8 puzzle_type);

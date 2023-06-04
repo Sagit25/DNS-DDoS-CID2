@@ -5514,19 +5514,12 @@ static int tcp_check_puzzle_for_syn_packet(struct sock *sk, struct sk_buff *skb,
 		policy_ip = ih->saddr;
 	}
 
-	return check_puzzle(tp->rx_opt.puzzle_type, tp->rx_opt.puzzle, tp->rx_opt.nonce, ntohl(ih->saddr), 0, ntohl(policy_ip));
-}
-
-
-static int puzzle_data_updated(struct sock *sk, struct sk_buff *skb,
-					 const struct tcphdr *th)
-{
-	struct tcp_sock *tp = tcp_sk(sk);
-	struct tcp_fastopen_cookie foc = { .len = -1 };
-	struct iphdr * ih = ip_hdr(skb);
-
-	tcp_parse_options(sock_net(sk), skb, &tp->rx_opt, 0, &foc);
-	return update_puzzle_cache(ih->daddr, tp->rx_opt.puzzle_type, tp->rx_opt.puzzle, tp->rx_opt.threshold);
+	printk(KERN_INFO "check puzzle for %u.%u.%u.%u\n puzzle : %u, nonce : %u\n"
+                , (policy_ip  >> 24)%256
+                , (policy_ip  >> 16)%256
+                , (policy_ip  >>  8)%256
+                , (policy_ip       )%256, tp->rx_opt.puzzle, tp->rx_opt.nonce);
+	return check_puzzle(tp->rx_opt.puzzle_type, tp->rx_opt.puzzle, tp->rx_opt.nonce, (ih->saddr), 0, (policy_ip));
 }
 
 /*
@@ -5837,12 +5830,19 @@ static int tcp_rcv_synsent_state_process(struct sock *sk, struct sk_buff *skb,
 	struct inet_connection_sock *icsk = inet_csk(sk);
 	struct tcp_sock *tp = tcp_sk(sk);
 	struct tcp_fastopen_cookie foc = { .len = -1 };
+	struct iphdr * ih = ip_hdr(skb);
 	int saved_clamp = tp->rx_opt.mss_clamp;
+	struct puzzle_cache* cache;
+	int puzzle_updated = 0;
 	bool fastopen_fail;
 
 	tcp_parse_options(sock_net(sk), skb, &tp->rx_opt, 0, &foc);
 	if (tp->rx_opt.saw_tstamp && tp->rx_opt.rcv_tsecr)
 		tp->rx_opt.rcv_tsecr -= tp->tsoffset;
+	printk(KERN_INFO "log response of syn >> %s\npuzzle_type: %u, threshold: %u, puzzle: %u\n"
+				, th->rst ? "RST" : "   ", tp->rx_opt.puzzle_type, tp->rx_opt.threshold, tp->rx_opt.puzzle);
+
+	puzzle_updated = update_puzzle_cache(ih->daddr, tp->rx_opt.puzzle_type, tp->rx_opt.puzzle, tp->rx_opt.threshold);
 
 	if (th->ack) {
 		/* rfc793:
@@ -5874,8 +5874,20 @@ static int tcp_rcv_synsent_state_process(struct sock *sk, struct sk_buff *skb,
 		 */
 
 		if (th->rst) {
-			if(puzzle_data_updated(sk, skb, th))
-				goto retry_with_puzzle_data;
+			if(puzzle_updated && find_puzzle_cache(ih->daddr, &cache)) {
+				switch(cache->puzzle_type) {
+				case PZLTYPE_LOCAL:
+					printk(KERN_ALERT "trying retransmition for ip : %u\n", ntohl(ih->daddr));
+					tcp_xmit_retransmit_queue(sk);
+					goto discard_and_undo;
+
+				case PZLTYPE_DNS:
+					printk(KERN_ALERT "trying get puzzle from DNS\n");
+					goto discard_and_undo;
+				default:
+					break;
+				}
+			}
 			tcp_reset(sk);
 			goto discard;
 		}
@@ -6096,12 +6108,11 @@ int tcp_rcv_state_process(struct sock *sk, struct sk_buff *skb)
 			 * so we need to make sure to disable BH and RCU right there.
 			 */
 
-			printk(KERN_WARNING "print_policy\n");
-			//add_policy(htonl(8323073), 2, 2);
-			print_policy();
-
-			if(tcp_check_puzzle_for_syn_packet(sk, skb, th))
+			if(tcp_check_puzzle_for_syn_packet(sk, skb, th)){
+				printk("puzzle failed\n");
 				return 1; // send rst
+			}
+			printk("puzzle_success\n");
 
 			rcu_read_lock();
 			local_bh_disable();
@@ -6155,7 +6166,7 @@ int tcp_rcv_state_process(struct sock *sk, struct sk_buff *skb)
 				      FLAG_NO_CHALLENGE_ACK) > 0;
 
 	if (!acceptable) {
-		if (sk->sk_state == TCP_SYN_RECV)
+		if (sk->sk_state == TCP_SYN_RECV) 
 			return 1;	/* send one RST */
 		tcp_send_challenge_ack(sk, skb);
 		goto discard;
@@ -6202,6 +6213,7 @@ int tcp_rcv_state_process(struct sock *sk, struct sk_buff *skb)
 
 		if (tp->rx_opt.tstamp_ok)
 			tp->advmss -= TCPOLEN_TSTAMP_ALIGNED;
+		update_puzzle_cache(ip_hdr(skb)->daddr, tp->rx_opt.puzzle_type, tp->rx_opt.puzzle, tp->rx_opt.threshold);
 
 		if (!inet_csk(sk)->icsk_ca_ops->cong_control)
 			tcp_update_pacing_rate(sk);
